@@ -1,0 +1,69 @@
+# Welcome to serverless. Read the docs
+# https://serverless.com/framework/docs/
+
+# Serverless.yml is the configuration the CLI
+# uses to deploy your code to your provider of choice
+
+# The `service` block is the name of the service
+service: dripbot
+
+custom:
+  dripbotTableName: 'dripbot-${self:provider.stage}'
+
+# The `provider` block defines where your service will be deployed
+provider:
+  name: aws
+  runtime: nodejs6.10
+  memorySize: 128
+
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - { "Fn::GetAtt": ["DripbotDynamoDBTable", "Arn" ] }
+    - Effect: Allow
+      Action:
+        - ses:SendEmail
+      Resource: "*"
+
+  environment:
+    DRIPBOT_TABLE: ${self:custom.dripbotTableName}
+    GW_URL: { "Fn::Join" : ["", [ "https://", { "Ref" : "ApiGatewayRestApi" }, ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}" ] ]  }
+
+
+
+# The `functions` block defines what code to deploy
+functions:
+  logEvent:
+    handler: handler.logEvent
+    # The `events` block defines how to trigger the handler.helloWorld code
+    events:
+      - http:
+          path: logevent/{username}/{action}
+          method: any
+          cors: true
+
+resources:
+  Resources:
+    DripbotDynamoDBTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: userName
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: userName
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:custom.dripbotTableName}
+
