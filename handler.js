@@ -3,10 +3,13 @@
 const AWS = require('aws-sdk');
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 const DRIPBOT_TABLE = process.env.DRIPBOT_TABLE;
+const SENDER_EMAIL = process.env.SENDER_EMAIL;
 const HIGH_BS = 225;
 const HIGH_BS_WAIT = 60; // in minutes
 const LOW_BS = 70;
 const LOW_BS_WAIT = 30;  // in minutes
+const MAX_DATA_AGE = 20; // max age in minutes before a warning flag appears on the view page
+
 const arrowList = {
   'DoubleUp': '⟰',
   'SingleUp': '⇑',
@@ -63,12 +66,18 @@ module.exports.logEvent = (event, context, callback) => {
             Direction: user.direction,
             LastTested: user.testTime,
           } 
+          console.log(`Serving GET response for user ${event.pathParameters.username}`);
+
           var output = `<html><head><title>${user.userName} at ${user.sgv} ${arrowListHTML[user.direction]}</title><body>\n`;
           output += `<script>setTimeout(function() { location.reload(true) }, 120000);</script>`;
           output += `<style> .row:after {content: ""; display: table; clear: both;} .leftcol {float: left; width: 130px} .rightcol { float: left; width: 220px}</style>`;
 
           for(var label in viewData) {
             output += `<div class="row"><div class="leftcol">${label}</div><div class="rightcol">${viewData[label]}</div></div>\n`;
+          }
+          var testTime = Date.parse(user.testTime);
+          if (Date.now() - testTime > MAX_DATA_AGE * 60 * 1000) {
+            output += `<div style="color: red; border: 1px solid black">Sample data is more than ${MAX_DATA_AGE} minutes old</div>`;
           }
           output += '</body>';
           // send output
@@ -122,6 +131,8 @@ function handleEntries(username, input, callback) {
           sendEmail('high bs', msg, user.email);
           // log timestamp of high bs notification
           user.lastHighBSNotification = Date.now();
+        } else {
+          console.log(`Deferring High BS notification due to timeout. (last notification at ${new Date(user.lastHighBSNotification)}`);
         }
       }
       if (user.email && input.sgv < user.low_bs) {
@@ -133,6 +144,8 @@ function handleEntries(username, input, callback) {
           sendEmail('low bs', msg, user.email);
           // log timestamp of low bs notification
           user.lastLowBSNotification = Date.now();
+        } else {
+          console.log(`Deferring Low BS notification due to timeout. (last notification at ${new Date(user.lastLowBSNotification)}`);
         }
       }
       return updateUserRecord(user);
@@ -272,7 +285,7 @@ function sendEmail(subjectText, bodyText, toAddresses) {
         Data: subjectText
       }
     },  
-    Source: "m@fict.co",
+    Source: SENDER_EMAIL,
      Tags: [
        {
          Name: 'source', /* required */

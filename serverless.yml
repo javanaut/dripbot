@@ -34,6 +34,8 @@ provider:
 
   environment:
     DRIPBOT_TABLE: ${self:custom.dripbotTableName}
+    # Edit the following email address to match your configuration
+    SENDER_EMAIL: "noreply@example.com"
     GW_URL: { "Fn::Join" : ["", [ "https://", { "Ref" : "ApiGatewayRestApi" }, ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}" ] ]  }
 
 
